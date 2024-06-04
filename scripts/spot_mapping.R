@@ -20,8 +20,8 @@ spotmap_data23$species<-as.factor(spotmap_data23$species) # Sets species as fact
 # Set the extent (max/min lat/lon) and open the base map
 # Uses the min and max latitude and longitude in the dataset and adds a small amount
 static_base_map <- openmap(c(max(spotmap_data23$lat)+.0005, min(spotmap_data23$lon)-.0005), 
-              + c(min(spotmap_data23$lat)-.0005, max(spotmap_data23$lon)+.0005),
-              type = "osm") # Map type, some of the map types do not work
+                           + c(min(spotmap_data23$lat)-.0005, max(spotmap_data23$lon)+.0005),
+                           type = "osm") # Map type, some of the map types do not work
 
 # Project latitude and longitude onto the base map so lat/lon data can be plotted
 base_map_projection <- openproj(static_base_map, projection = "+proj=longlat +datum=WGS84")
@@ -37,5 +37,4 @@ point_plot_23 <- autoplot.OpenStreetMap(base_map_projection, expand = TRUE) +
 point_plot_23 # Call the object
 
 ggsave("output/point_plot_23.png") # Save the object
-
 
