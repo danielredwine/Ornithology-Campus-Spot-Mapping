@@ -11,6 +11,7 @@ library(OpenStreetMap)  # To obtain base maps, install 64-bit Java if you get an
 library(sf)  # Used to encode spatial data
 library(tidyverse)  # Includes DPLYR, GGplot, TIDYR, etc.
 library(raster)  # To rasterize, analyze, and model spatial data
+library(ks) # For KDE smoothing
 
 # Load and clean the datasets, dataset should not require much cleaning
 spotmap_data <- read.csv("data/2023data.csv")  # load in dataset
