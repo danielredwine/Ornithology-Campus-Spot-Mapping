@@ -16,7 +16,7 @@ library(ks) # For KDE smoothing
 # Load and clean the datasets, dataset should not require much cleaning
 spotmap_data <- read.csv("data/2023data.csv")  # load in dataset
 spotmap_data$lat <- as.numeric(spotmap_data$lat)  # Sets data type to numeric 
-spotmap_data$lon <- as.numeric(spotmap_data$lon)  # Would also remove non-numeric data
+spotmap_data$lon <- as.numeric(spotmap_data$lon)  # This also removes non-numeric data
 spotmap_data$species <- as.factor(spotmap_data$species)  # Sets species as factor
 
 # Set the extent (max/min lat/lon) and open the base map
@@ -128,7 +128,7 @@ separate_species_spdf <- split(x = spotmap_data_spdf, f = spotmap_data_spdf$spec
 
 # now to try kernel density estimation
 # Step one: do least squares cross-validation to estimate bandwidth (bw)
-# This basically means
+# This optimizes smoothing of the raster for KDE
 bw <- lapply(separate_species_spdf, FUN = function(x){ks::Hlscv(x@coords)})
 
 
@@ -138,10 +138,8 @@ Species_kde <-mapply(separate_species_spdf,bw,
                      FUN = function(x,y){
                        raster(kde(x@coords,h=y,))})
 
-# This code calculates which areas account for 95% of density
-# Inputs:
-# kde = kernel density estimate
-# prob = probabily - default is 0.95
+# This code calculates which areas account for 95% of observations
+# Inputs: kde = kernel density estimate, prob = probability - default is 0.95
 getContour <- function(kde, prob = 0.95){
   # set all values 0 to NA
   kde[kde == 0]<-NA
@@ -159,6 +157,7 @@ getContour <- function(kde, prob = 0.95){
   return(kdeprob)
 }
 
+# Apply the contour to the KDE
 all_95kde <- lapply(Species_kde,FUN = getContour, prob = 0.95)
 
 # make a raster extent object to set the bounds to the base map
@@ -185,32 +184,25 @@ plot(hosp_kde)
 # NOMO
 plot(nomo_kde)
 
-## can we put a KDE on top of a map?
-## first a blank basemap:
-
-base_raster <- openmap(c(max(spotmap_data$lat)+0.0025, min(spotmap_data$lon)-0.0025), + 
+# Generate a base map to plot the KDE onto
+base_map <- openmap(c(max(spotmap_data$lat)+0.0025, min(spotmap_data$lon)-0.0025), + 
                          c(min(spotmap_data$lat)-0.0025, max(spotmap_data$lon)+0.0025), 
                        type = "esri-topo")
-base_raster_proj <- openproj(base_raster, projection = "+proj=longlat +datum=WGS84")
 
-## plot base map, then add kde of each species
+base_map_proj <- openproj(base_map, projection = "+proj=longlat +datum=WGS84")
 
-##House Sparrow#
-plot(base_raster_proj)
+# Plot House Sparrow
+plot(base_map_proj)
 plot(hosp_kde, alpha = 0.5, add=TRUE, title("House Sparrow"), horizontal=TRUE)
-##plot(hosp_mcp,add = TRUE)## this works!
 
-#European Starling#
-plot(base_raster_proj)
+# Plot European Starling
+plot(base_map_proj)
 plot(eust_kde, alpha = 0.5, add=TRUE, title("European Starling"), horizontal=TRUE)
-##plot(eust_mcp,add = TRUE)
 
-#Eastern Bluebird#
-plot(base_raster_proj)
+# Plot Eastern Bluebird
+plot(base_map_proj)
 plot(eabl_kde, alpha = 0.5, add=TRUE, title("Eastern Bluebird"), horizontal=TRUE)
-##EABL_mcp<-plot(eabl_mcp,add = TRUE)
 
-#Northern Mockingbird#
-plot(base_raster_proj)
+# Plot Northern Mockingbird
+plot(base_map_proj)
 plot(nomo_kde, alpha = 0.5, add=TRUE, title ("Northern Mockingbird"), horizontal=TRUE)
-##plot(nomo_mcp,add = TRUE)
