@@ -1,7 +1,7 @@
 # Daniel Redwine
 # 7 June 2024
 
-# This script aims to utilize campus spot mapping data to create maps
+# This script aims to utilize campus spot mapping data to create various maps
 
 # Clear environment
 rm(list = ls())
@@ -109,14 +109,17 @@ eust_point  # Call the object
 
 ggsave("output/eust_point.png")  # Save the object
 
-# the next bunch of stuff comes from 
-# https://mhallwor.github.io/_pages/activities_GenerateTerritories
-# goal is to create kernel density estimates with an approximation of density
+# Next map KDE and 95% propbability ranges
+# The function Hpi used below cannot weight our observations based on count (num_ind)
+# as a workaround to take count into effect we will use the function uncount()
+# This removes the column num_ind and duplicates the corresponding row by that value 
+spotmap_data <- spotmap_data %>%
+  uncount(num_ind)
 
 # first make the data into a SpatialPoints object
-# CRS = coordinate reference system, +init=epsg:4326 should be the correct code
+# CRS = coordinate reference system, use same throughout (+proj=longlat +datum=WGS84)
 spotmap_datapts <- sp::SpatialPoints(coords = cbind(spotmap_data$lon, spotmap_data$lat),
-                                proj4string = sp::CRS("+init=epsg:4326"))
+                                proj4string = sp::CRS("+proj=longlat +datum=WGS84"))
 
 # put all the data into a single SpatialPointsDataFrame (spdf)
 spotmap_data_spdf <- sp::SpatialPointsDataFrame(spotmap_datapts, spotmap_data)
@@ -127,18 +130,20 @@ separate_species_spdf <- split(x = spotmap_data_spdf, f = spotmap_data_spdf$spec
                                drop = FALSE)
 
 # now to try kernel density estimation
-# Step one: do least squares cross-validation to estimate bandwidth (bw)
-# This optimizes smoothing of the raster for KDE
-bw <- lapply(separate_species_spdf, FUN = function(x){ks::Hlscv(x@coords)})
+# do least squares cross-validation to estimate bandwidth (bw)
+# This optimizes smoothing of the raster
+bw <- lapply(separate_species_spdf, FUN = function(x){ks::Hpi(x@coords)})
 
 
-# Step two: generate kde
+# Generate KDE using the optimal bandwidth
 Species_kde <-mapply(separate_species_spdf,bw,
                      SIMPLIFY = FALSE,
                      FUN = function(x,y){
                        raster(kde(x@coords,h=y,))})
 
 # This code calculates which areas account for 95% of observations
+# 95% is normally used for home range
+# Here we could use it as a pseudo home range for the species, or a range map
 # Inputs: kde = kernel density estimate, prob = probability - default is 0.95
 getContour <- function(kde, prob = 0.95){
   # set all values 0 to NA
@@ -157,7 +162,7 @@ getContour <- function(kde, prob = 0.95){
   return(kdeprob)
 }
 
-# Apply the contour to the KDE
+# Apply the contour to the raster
 all_95kde <- lapply(Species_kde,FUN = getContour, prob = 0.95)
 
 # make a raster extent object to set the bounds to the base map
@@ -166,23 +171,34 @@ all_95kde <- lapply(Species_kde,FUN = getContour, prob = 0.95)
 extent <- extent(min(spotmap_data$lon)-0.0025, max(spotmap_data$lon)+0.0025, 
                  min(spotmap_data$lat)-0.0025, max(spotmap_data$lat)+0.0025)
 
-# Set extent of KDE and create an object
+# Set extent of KDE and create an object for plotting KDE
 hosp_kde <- setExtent(Species_kde[["HOSP"]], extent)
 eust_kde <- setExtent(Species_kde[["EUST"]], extent)
 eabl_kde <- setExtent(Species_kde[["EABL"]], extent)
 nomo_kde <- setExtent(Species_kde[["NOMO"]], extent)
 
+# Set extent of 95% probability and create an object
+hosp_95 <- setExtent(all_95kde[["HOSP"]], extent)
+eust_95 <- setExtent(all_95kde[["EUST"]], extent)
+eabl_95 <- setExtent(all_95kde[["EABL"]], extent)
+nomo_95 <- setExtent(all_95kde[["NOMO"]], extent)
+
+# View the KDE and 95% probability without a base map
 # EABL
 plot(eabl_kde)
+plot(eabl_95)
 
 # EUST
 plot(eust_kde)
+plot(eust_95)
 
 # HOSP
 plot(hosp_kde)
+plot(hosp_95)
 
 # NOMO
 plot(nomo_kde)
+plot(nomo_95)
 
 # Generate a base map to plot the KDE onto
 base_map <- openmap(c(max(spotmap_data$lat)+0.0025, min(spotmap_data$lon)-0.0025), + 
@@ -191,18 +207,37 @@ base_map <- openmap(c(max(spotmap_data$lat)+0.0025, min(spotmap_data$lon)-0.0025
 
 base_map_proj <- openproj(base_map, projection = "+proj=longlat +datum=WGS84")
 
-# Plot House Sparrow
+# Plot House Sparrow KDE
 plot(base_map_proj)
-plot(hosp_kde, alpha = 0.5, add=TRUE, title("House Sparrow"), horizontal=TRUE)
+plot(hosp_kde, alpha = 0.5, add=TRUE, title("House Sparrow"))
 
-# Plot European Starling
+# Plot European Starling KDE
 plot(base_map_proj)
-plot(eust_kde, alpha = 0.5, add=TRUE, title("European Starling"), horizontal=TRUE)
+plot(eust_kde, alpha = 0.5, add=TRUE, title("European Starling"))
 
-# Plot Eastern Bluebird
+# Plot Eastern Bluebird KDE
 plot(base_map_proj)
-plot(eabl_kde, alpha = 0.5, add=TRUE, title("Eastern Bluebird"), horizontal=TRUE)
+plot(eabl_kde, alpha = 0.5, add=TRUE, title("Eastern Bluebird"))
 
-# Plot Northern Mockingbird
+# Plot Northern Mockingbird KDE 
 plot(base_map_proj)
-plot(nomo_kde, alpha = 0.5, add=TRUE, title ("Northern Mockingbird"), horizontal=TRUE)
+plot(nomo_kde, alpha = 0.5, add=TRUE, title ("Northern Mockingbird"))
+
+# Plot House Sparrow 95% probability range 
+plot(base_map_proj)
+plot(hosp_95, alpha = 0.5, add=TRUE, title("House Sparrow"), legend = FALSE)
+
+# Plot European Starling 95% Probability range
+plot(base_map_proj)
+plot(eust_95, alpha = 0.5, add=TRUE, title("European Starling"), legend = FALSE)
+
+# Plot Eastern Bluebird 95% Probability range
+plot(base_map_proj)
+plot(eabl_95, alpha = 0.5, add=TRUE, title("Eastern Bluebird"), legend = FALSE)
+
+# Plot Northern Mockingbird 95% Probability range
+plot(base_map_proj)
+plot(nomo_95, alpha = 0.5, add=TRUE, title ("Northern Mockingbird"), legend = FALSE)
+
+# To save 95% probability maps export in plots pane with width 1200 and height 850 
+# To save KDE maps use export in plots pane with width 1536 and height 890
